@@ -1,6 +1,6 @@
-DECLARE @loginname NVARCHAR(100)= 'test'; --add name which login you get permission
-DECLARE @str NVARCHAR(MAX), @dbname NVARCHAR(MAX), @dbname1 NVARCHAR(MAX), @script NVARCHAR(MAX), @login NVARCHAR(50);
-IF OBJECT_ID('tempdb..#Results') IS NOT NULL
+DECLARE @loginname NVARCHAR(100)= 'test_wmi'; --add name which login you get permission
+DECLARE @str NVARCHAR(MAX), @dbname NVARCHAR(MAX), @dbname1 NVARCHAR(MAX), @script NVARCHAR(MAX)
+   IF OBJECT_ID('tempdb..#Results') IS NOT NULL
     DROP TABLE #Results;
 CREATE TABLE #Results
 (loginname NVARCHAR(100), 
@@ -18,8 +18,7 @@ CREATE TABLE #Results1
 DECLARE MyCursor CURSOR
 FOR SELECT name
     FROM master.sys.databases
-    WHERE name NOT IN('aspnetdb')
-    AND is_read_only = 0
+    WHERE is_read_only = 0
     AND state = 0;
 OPEN MyCursor;
 FETCH NEXT FROM MyCursor INTO @dbname;
@@ -49,6 +48,7 @@ ORDER BY perm.permission_name ASC, perm.state_desc ASC';
         INSERT INTO #Results
         EXEC sp_executesql 
              @str;
+
         ----Databases_levels_permission----
         SET @str = 'use [' + @dbname + '];' + '
 SELECT USER_NAME(usr.principal_id) COLLATE database_default as login_name,  CASE WHEN perm.state <> ''W'' THEN perm.state_desc ELSE ''GRANT'' END
@@ -136,12 +136,21 @@ ORDER BY
     END;
 CLOSE MyCursor;
 DEALLOCATE MyCursor;
-SELECT *
+
+
+select * from (
+SELECT distinct dbname,loginname,'use '+dbname+'; IF (USER_ID('''+@loginname+''') IS NULL) CREATE USER ['+@loginname+'] FOR LOGIN ['+@loginname+'];' script,'Create user'per_type
 FROM #Results1
 WHERE loginname = @loginname
+union all 
+SELECT *
+FROM #Results1
+WHERE loginname = @loginname)
+as t
 ORDER BY dbname,
-         CASE
-             WHEN PATINDEX('%Connect%', script) > 0
+         CASE  WHEN PATINDEX('%Create%', script) > 0
              THEN 1
-             ELSE 2
+             WHEN PATINDEX('%Connect%', script) > 0
+             THEN 2
+             ELSE 3
          END;
